@@ -295,6 +295,20 @@
         geolocation.on('click', function () {
             geolocation.getCurrentPosition();
         });
+        // 定位成功事件处理
+        geolocation.on('complete', function (result) {
+            console.log('gs:' + result.position+typeof(result.position));
+
+            var L = result.position;
+            getAddress(L);
+
+        })
+
+        // 定位失败事件处理
+        geolocation.on('error', function () {
+            alert('定位失败，请检查网络或开启定位权限！');
+        });
+
     });
 
     //根据经纬度得到地址信息
