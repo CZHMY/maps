@@ -9,16 +9,23 @@
     <link rel="stylesheet" href="https://a.amap.com/jsapi_demos/static/demo-center/css/demo-center.css"/>
     <script src="https://cache.amap.com/lbs/static/es5.min.js"></script>
     <script type="text/javascript" src="https://cache.amap.com/lbs/static/addToolbar.js"></script>
+    <script type="text/javascript">
+        // 高德地图秘钥，必须在加载JSAPI load.js文件之前
+        window._AMapSecurityConfig = {
+            securityJsCode: 'e325a6dd8d461d366d21ab9cf4589aec'   // 开发环境使用
+        }
+    </script>
 
 </head>
 <style>
     html, body {
         width: 100%;
         height: 90%;
+
     }
 
 
-    #deleteButton, #placeMarkerButton, #JWButton ,#addrButton{
+    #deleteButton, #placeMarkerButton, #JWButton, #addrButton, #planButton, #clearButton {
         padding: 10px 20px;
         background: linear-gradient(to right, #ff416c, #ff4b2b);
         color: white;
@@ -41,12 +48,12 @@
     }
 
     /* 容器用于定位按钮和输入框 */
-    .controls-container {
+    #CC {
         position: absolute;
         bottom: 5px;
         margin-left: 20px;
         margin-right: auto;
-        width: 80%;
+        width: 60%;
         background-color: #00868b;
         height: 160px;
         padding-left: 30px; /* 为.container-container添加左侧内边距 */
@@ -58,7 +65,7 @@
         width: 160px; /* 调整宽度 */
         margin-left: auto;
         margin-bottom: auto; /* 添加底部外边距，使按钮与输入框分开 */
-        background-color: #00728b;
+        background-color: #e87fa5;
         font-size: 13px;
         margin-right: auto;
     }
@@ -79,24 +86,71 @@
     .input-group {
         display: flex;
         flex-direction: row;
+        gap: 10px;
+        flex-wrap: wrap;
+        align-items: center;
+        margin-top: 30px;
+        margin-bottom: 10px;
+        margin-left: 5px;
+
+    }
+
+    #pathPlanningContainer {
+        position: absolute;
+        display: flex;
+        bottom: 5px;
+        left: 59%;
+        margin-left: auto;
+        margin-right: auto;
+        width: 30%;
+        background-color: #008b17;
+        height: 160px;
+        padding-left: 30px;
+    }
+
+    #pathPlanningInputGroup {
+        display: flex;
+        flex-direction: row;
         width: 80%;
         gap: 10px;
         flex-wrap: wrap;
         align-items: center;
-        margin-top: 40px;
+        margin-top: 20px;
         margin-bottom: 30px;
         margin-left: 5px;
 
     }
 
+    #panel {
+        position: fixed;
+        background-color: white;
+        max-height: 80%;
+        overflow-y: auto;
+        top: 10px;
+        right: 100px;
+        width: 280px;
+    }
+
+    #panel .amap-call {
+        background-color: #009cf9;
+        border-top-left-radius: 4px;
+        border-top-right-radius: 4px;
+    }
+
+    #panel .amap-lib-driving {
+        border-bottom-left-radius: 4px;
+        border-bottom-right-radius: 4px;
+        overflow: hidden;
+    }
+
 </style>
 
 <body>
-<div class="controls-container">
+<div class="controls-container" id="CC">
     <div class="input-group">
         <input type="text" id="longitudeInput" placeholder="Longitude" style="width: 150px;"> <!-- 缩小经度输入框 -->
         <input type="text" id="latitudeInput" placeholder="Latitude" style="width: 150px;"> <!-- 缩小纬度输入框 -->
-        <input type="text" id="address" placeholder="根据经纬的得到的地址信息" style="width: 350px;">
+        <input type="text" id="address" placeholder="根据经纬度的得到的地址信息" style="width: 350px;">
     </div>
     <button id="placeMarkerButton" class="control-button">在地图上标点</button>
     <button id="deleteButton" class="control-button">删除所有标记</button>
@@ -104,8 +158,19 @@
     <button id="addrButton" class="control-button">经纬度-->地址</button>
 </div>
 
+<div class="controls-container" id="pathPlanningContainer">
+    <div class="input-group" id="pathPlanningInputGroup">
+        <input type="text" id="start" placeholder="起点" style="width: 300px;">
+        <input type="text" id="end" placeholder="终点" style="width: 300px;">
+        <button id="planButton" class="control-button">路径规划</button>
+        <button id="clearButton" class="control-button">清除路径</button>
+    </div>
+</div>
+
 <div id="results"></div>
 <div id="container" class="map"></div>
+<div id="panel"></div>
+
 <div class='input-card' id="tool">
     <div class="input-item">
         <input type="checkbox" checked onclick="toggleScale(this)"/>比例尺
@@ -124,7 +189,7 @@
     </div>
 </div>
 
-<script src="https://webapi.amap.com/maps?v=2.0&key=41e28696507dae53875f531595603439&plugin=AMap.Scale,AMap.HawkEye,AMap.ToolBar,AMap.ControlBar,AMap.Geocoder"></script>
+<script src="https://webapi.amap.com/maps?v=2.0&key=41e28696507dae53875f531595603439&plugin=AMap.Scale,AMap.HawkEye,AMap.ToolBar,AMap.ControlBar,AMap.MouseTool,AMap.Geocoder"></script>
 <script src="https://a.amap.com/jsapi_demos/static/demo-center/js/demoutils.js"></script>
 
 <!-- UI组件库 1.0 -->
@@ -233,7 +298,7 @@
     });
 
     //根据经纬度得到地址信息
-    function getAddress(lnglat,a=true) {
+    function getAddress(lnglat, a = true) {
         var url = `https://restapi.amap.com/v3/geocode/regeo?output=json&location=${lnglat}&key=7091f944365ced6ed98f5c081c402d4c&radius=1000&extensions=all`;
         console.log('huoqu');
         fetch(url)
@@ -246,12 +311,11 @@
             .then(data => {
                 console.log(data);
                 var address = data.regeocode.formatted_address;
-                if(address[0]) {
+                if (address[0]) {
                     console.log('address:' + address);
                     document.getElementById('address').value = address;
-                    if(a) placeMarker(lnglat);
-                }
-                else {
+                    if (a) placeMarker(lnglat);
+                } else {
                     //console.log('无法获取地址信息')
                     document.getElementById('address').value = '选择有误！';
                     alert('无法获取地址信息(只针对国内)，或手动输入');
@@ -277,18 +341,18 @@
                 return response.json();
             })
             .then(data => {
-                console.log(data);
-                var lnglat = data.geocodes[0].location.split(',');
-                var lng = lnglat[0];
-                var lat = lnglat[1];
-                console.log('lng:' + lng + ',lat:' + lat);
-                document.getElementById('longitudeInput').value = lng;
-                document.getElementById('latitudeInput').value = lat;
-                clickedLngLat=new AMap.LngLat(lng, lat)
+                    console.log(data);
+                    var lnglat = data.geocodes[0].location.split(',');
+                    var lng = lnglat[0];
+                    var lat = lnglat[1];
+                    console.log('lng:' + lng + ',lat:' + lat);
+                    document.getElementById('longitudeInput').value = lng;
+                    document.getElementById('latitudeInput').value = lat;
+                    clickedLngLat = new AMap.LngLat(lng, lat)
 
-                placeMarker(clickedLngLat);
-            }
+                    placeMarker(clickedLngLat);
 
+                }
             )
     }
 
@@ -299,8 +363,8 @@
     });
 
     document.getElementById('addrButton').addEventListener('click', function () {
-        var lng=new AMap.LngLat(document.getElementById('longitudeInput').value, document.getElementById('latitudeInput').value)
-        getAddress(lng,true);
+        var lng = new AMap.LngLat(document.getElementById('longitudeInput').value, document.getElementById('latitudeInput').value)
+        getAddress(lng, true);
 
 
     });
@@ -320,40 +384,59 @@
     });
 
     // 在地图上放置标记的函数
-    function placeMarker(latLng) {
+    function placeMarker(lnglat) {
         var marker = new AMap.Marker({
-            position: latLng,
+            position: lnglat,
             map: map,
             clickable: true, // 添加可点击属性
             anchor: 'bottom-center',
             offset: new AMap.Pixel(0, 0)
         });
+        var content, con = null;
+        //再次点击删除标记
         marker.on('click', function () {
             this.setMap(null); // 点击标记时从地图中移除
             singleDeceiveMarkers = singleDeceiveMarkers.filter(m => m !== this); // 从数组中移除该标记
         });
-
-        if(document.getElementById('address').value){
+        if (document.getElementById('address').value) {
             console.log('address is exsited')
-            var content= document.getElementById('address').value+'\n'+'经纬度:'+latLng.getLng() + ', ' + latLng.getLat();
-        }
-        else {
+            con = document.getElementById('address').value;
+            content = document.getElementById('address').value + '\n' + '经纬度:' + lnglat.getLng() + ', ' + lnglat.getLat();
+        } else {
             console.log('address is not exsited')
-            var content = '经纬度:'+latLng.getLng() + ', ' + latLng.getLat();
+            content = '经纬度:' + lnglat.getLng() + ', ' + lnglat.getLat();
         }
         marker.setTitle(content);//当鼠标瞄准时显示经纬度标记
-        console.log("标记了一个点：", latLng);
-        map.setCenter(latLng);// 设置地图中心点
-
+        console.log("标记了一个点：", lnglat);
+        map.setCenter(lnglat);// 设置地图中心点
         singleDeceiveMarkers.push(marker);
+
+        // 创建右键菜单
+        var contextMenu2 = new AMap.ContextMenu();
+        //右键添加起点
+        contextMenu2.addItem("设为起点", function () {
+            document.getElementById('start').value = con;
+            contextMenu2.close(); //点击后关闭右键菜单
+        }, 0);
+
+        //右键添加终点
+        contextMenu2.addItem("设为终点", function () {
+            document.getElementById('end').value = con;
+            contextMenu2.close(); //点击后关闭右键菜单
+        }, 1);
+
+        //右键设置起点和终点
+        marker.on('rightclick', function (e) {
+            contextMenu2.open(map, e.lnglat)
+        });
     }
 
     // 地图标点按钮功能
     document.getElementById('placeMarkerButton').addEventListener('click', function () {
         var lng = parseFloat(document.getElementById('longitudeInput').value);
         var lat = parseFloat(document.getElementById('latitudeInput').value);
-        if(document.getElementById('address').value==='选择有误！')
-            document.getElementById('address').value='';
+        if (document.getElementById('address').value === '选择有误！')
+            document.getElementById('address').value = '';
         if (!isNaN(lng) && !isNaN(lat)) {
             var clickedLngLat = new AMap.LngLat(lng, lat);
 
@@ -425,14 +508,90 @@
     map.on('zoomchange', function () {
         console.log('当前地图的缩放级别:', map.getZoom());
     });
-    //
-    // //实时交通图层
-    // var traffic = new AMap.TileLayer.Traffic({
-    //     'autoRefresh': true,     //是否自动刷新,默认为false
-    //     'interval': 180,         //刷新间隔,默认180s
-    // });
-    //
-    // map.add(traffic);
+
+    //地址转经纬度
+    var geocoder = new AMap.Geocoder();
+
+    async function geoCode(addr) {
+        return new Promise((resolve, reject) => {
+            geocoder.getLocation(addr, function (status, result) {
+                if (status === 'complete' && result.geocodes.length) {
+                    resolve(result.geocodes[0].location);
+                    console.log('经纬度:', result.geocodes[0].location);
+                } else {
+                    log.error('根据地址查询位置失败');
+                    reject(new Error('Geocoding failed'));
+                }
+            });
+        });
+    }
+
+    let driving = null;
+    //路径规划,关键字和经纬度
+    document.getElementById('planButton').addEventListener('click', async function () {
+        AMap.plugin('AMap.Driving', async function () {
+            driving = new AMap.Driving({
+                policy: 0,
+                map: map,
+                panel: "panel",
+            });
+
+            var start = document.getElementById('start').value;
+            var end = document.getElementById('end').value;
+
+            if (start && end) {
+                try {
+                    const startLocation = await geoCode(start);
+                    const endLocation = await geoCode(end);
+                    driving.search(startLocation, endLocation, function (status, result) {
+                        console.log(result);
+                    });
+                } catch (error) {
+                    console.error(error);
+                    alert('地址解析失败，请检查输入的起点和终点');
+                }
+            } else {
+                alert('请输入起点和终点');
+            }
+        });
+
+    });
+    //清除路径查询结果
+    document.getElementById('clearButton').addEventListener('click', function () {
+        // 清除panel内容
+        document.getElementById('panel').innerHTML = '';
+
+        // 清除地图上的路径
+        if (driving) {
+            driving.clear();
+        } else {
+            console.warn('driving instance is not initialized yet.');
+        }
+    })
+
+    //创建右键菜单
+    var contextMenu = new AMap.ContextMenu();
+
+    //右键放大
+    contextMenu.addItem("放大一级", function () {
+        map.zoomIn();
+    }, 0);
+
+    //右键缩小
+    contextMenu.addItem("缩小一级", function () {
+        map.zoomOut();
+    }, 1);
+
+    //右键显示全国范围
+    contextMenu.addItem("缩放至全国范围", function (e) {
+        map.setZoomAndCenter(4, [108.946609, 34.262324]);
+    }, 2);
+
+    //地图绑定鼠标右击事件——弹出右键菜单
+    map.on('rightclick', function (e) {
+        contextMenu.open(map, e.lnglat);
+        contextMenuPositon = e.lnglat;
+    });
 
 </script>
 </body>
