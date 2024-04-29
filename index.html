@@ -304,9 +304,7 @@
        
         AMapUI.loadUI(['control/BasicControl'], function (BasicControl) {
             //图层切换控件
-            map.addControl(new BasicControl.LayerSwitcher({
-                position: 'lt'
-            })
+            map.addControl(new BasicControl.LayerSwitcher({position: 'lt'}))
         })
 
         map.addControl(scale);
