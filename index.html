@@ -5,7 +5,7 @@
     <meta content="IE=edge" http-equiv="X-UA-Compatible">
     <meta content="initial-scale=1.0, user-scalable=no, width=device-width" name="viewport">
     <title>网络空间地图可视化</title>
-    <link href="https://a.amap.com/jsapi_demos/static/demo-center/css/demo-center.css" rel="stylesheet"/>
+    <link href="http://a.amap.com/jsapi_demos/static/demo-center/css/demo-center.css" rel="stylesheet"/>
     <script src="https://cache.amap.com/lbs/static/es5.min.js"></script>
     <script src="https://cache.amap.com/lbs/static/addToolbar.js" type="text/javascript"></script>
     <script type="text/javascript">
@@ -41,6 +41,21 @@
             margin-left: 5px;
         }
 
+        #NETCJButton {
+            padding: 10px 20px;
+            background: linear-gradient(to right, #ff416c, #ff4b2b);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-flex;
+            font-size: 16px;
+            margin: 4px 2px;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+        }
 
         #container {
             height: 100%;
@@ -178,12 +193,14 @@
             <input id="longitudeInput" placeholder="Longitude" style="width: 150px;" type="text"> <!-- 缩小经度输入框 -->
             <input id="latitudeInput" placeholder="Latitude" style="width: 150px;" type="text"> <!-- 缩小纬度输入框 -->
             <input id="address" placeholder="根据经纬度的得到的地址信息" style="width: 350px;" type="text">
+            <button class="control-button" id="NETCJButton">网络测距</button>
         </div>
         <button class="control-button" id="placeMarkerButton">在地图上标点</button>
         <button class="control-button" id="deleteButton">删除所有标记</button>
         <button class="control-button" id="JWButton">地址-->经纬度</button>
         <button class="control-button" id="addrButton">经纬度-->地址</button>
         <button class="control-button" id="CJButton">测量距离</button>
+
     </div>
 
     <div class="controls-container" id="pathPlanningContainer">
@@ -261,7 +278,7 @@
 
     </div>
 
-    <script src="https://webapi.amap.com/maps?v=2.0&key=41e28696507dae53875f531595603439&plugin=AMap.Scale,AMap.HawkEye,AMap.ToolBar,AMap.ControlBar,AMap.MouseTool,AMap.Geocoder,AMap.DistrictSearch"></script>
+    <script src="http://webapi.amap.com/maps?v=2.0&key=41e28696507dae53875f531595603439&plugin=AMap.Scale,AMap.HawkEye,AMap.ToolBar,AMap.ControlBar,AMap.MouseTool,AMap.Geocoder,AMap.DistrictSearch"></script>
     <script src="https://a.amap.com/jsapi_demos/static/demo-center/js/demoutils.js"></script>
     <script src="https://a.amap.com/jsapi_demos/static/demo-center/js/jquery-1.11.1.min.js"
             type="text/javascript"></script>
@@ -301,14 +318,48 @@
                 viewMode: '3D' //使用3D视图
             });
 
-       
+        var osm = new AMap.TileLayer({
+            // 图块取图地址
+            getTileUrl: 'http://127.0.0.1:17180/osm_tiles/[z]/[x]/[y].png',
+            zIndex: 100
+        });
+        var origin = new AMap.TileLayer({
+            // 图块取图地址
+            getTileUrl: 'http://127.0.0.1:17180/xxx/[z]/[x]/[y].png',
+        });
+        //之后可添加自己的地图服务器，参考https://lbs.amap.com/demo/amap-ui/demos/amap-ui-basiccontrol/layer-switcher
+        //可加一个错误的网址，回到原始图层
         AMapUI.loadUI(['control/BasicControl'], function (BasicControl) {
             //图层切换控件
-            var layerCtrl1 = new BasicControl.LayerSwitcher({
-            position: 'tl'
+            map.addControl(new BasicControl.LayerSwitcher({
+                position: 'lt',
+                baseLayers: [{
+
+                    id: 'ori',
+                    name: '原始图层',
+                    layer: origin
+                }, {
+                    id: 'satellite',
+                    name: '高德卫星图',
+                    layer: new AMap.TileLayer.Satellite()
+                }, {
+
+                    id: 'osm',
+                    name: 'OSM地图',
+                    layer: osm
+                }],
+                //自定义覆盖图层
+                overlayLayers: [{
+                    id: 'traffic',
+                    name: '路况图',
+                    layer: new AMap.TileLayer.Traffic()
+                }, {
+                    id: 'roadNet',
+                    name: '路网图',
+                    layer: new AMap.TileLayer.RoadNet()
+                }]
+            }));
         });
-            map.addControl(layerCtrl1)
-        })
 
         map.addControl(scale);
         map.addControl(toolBar);
@@ -411,7 +462,9 @@
 
         });
 
-        //根据经纬度得到地址信息
+        //根据经纬度得到地址信息,并在地址栏填入地址
+        var addr = '';
+
         function getAddress(lnglat, a = true) {
             var url = `https://restapi.amap.com/v3/geocode/regeo?output=json&location=${lnglat}&key=7091f944365ced6ed98f5c081c402d4c&radius=1000&extensions=all`;
             //console.log('huoqu');
@@ -426,9 +479,11 @@
                     console.log(data);
                     var address = data.regeocode.formatted_address;
                     if (address[0]) {
+
                         console.log('address:' + address);
                         document.getElementById('address').value = address;
                         if (a) placeMarker(lnglat);
+                        addr = address;
                         return address;
                     } else {
                         //console.log('无法获取地址信息')
@@ -440,6 +495,7 @@
                 })
                 .catch(error => {
                     console.error('There has been a problem with your fetch operation:', error);
+                    return false;
                 })
         }
 
@@ -690,6 +746,7 @@
         }
 
         let driving = null;
+        var drivings = [];
         //路径规划,关键字和经纬度
         document.getElementById('planButton').addEventListener('click', async function () {
             AMap.plugin('AMap.Driving', async function () {
@@ -698,7 +755,7 @@
                     map: map,
                     panel: "panel",
                 });
-
+                drivings.push(driving);
                 var start = document.getElementById('start').value;
                 var end = document.getElementById('end').value;
 
@@ -726,8 +783,10 @@
             document.getElementById('panel').innerHTML = '';
 
             // 清除地图上的路径
-            if (driving) {
-                driving.clear();
+            if (drivings.length !== 0) {
+                for (var i = 0; i < drivings.length; i++) {
+                    drivings[i].clear();
+                }
             } else {
                 console.warn('driving instance is not initialized yet.');
             }
@@ -926,7 +985,7 @@
         });
         //距离测量
         var line = new AMap.Polyline({
-            strokeColor: '#80d8ff',
+            strokeColor: '#072eef',
             isOutline: true,
             outlineColor: 'white'
         });
@@ -963,6 +1022,52 @@
 
         });
 
+        //网络距离测量
+        var net_startpoint, net_endpoint, net_startIP, net_endpointIP = null;
+        var line1 = new AMap.Polyline({
+            strokeColor: '#da1111',
+            strokeWeight: 6,
+            // isOutline: true,
+            // outlineColor: 'white',
+            // lineJoin: 'round',
+            // lineCap: 'round',
+            showDir: true
+        });
+        line1.setMap(map);
+        var text1 = new AMap.Text({
+            text: '',
+            style: {
+                'background-color': '#29b6f6',
+                'border-color': '#e1f5fe',
+                'font-size': '12px'
+            }
+        });
+        text1.setMap(map)
+
+        function net_computeDis() {
+            var p1 = net_startpoint.getPosition();
+            var p2 = net_endpoint.getPosition();
+            var textPos = p1.divideBy(2).add(p2.divideBy(2));
+            //获取时延,尚未解决
+            //var distance = ping(net_startIP, net_endpointIP)
+            var path = [p1, p2];
+            line1.setPath(path);
+            text1.setText('距离（时延）：' + 20 + 'ms')
+            text1.setPosition(textPos)
+        }
+
+        document.getElementById('NETCJButton').addEventListener('click', function () {
+            try {
+                net_computeDis();
+                lines_tr.push(line1)
+                texts_tr.push(text1)
+                line1.setMap(map);
+                text1.setMap(map);
+            } catch (e) {
+                log.error('请先选择起点和终点');
+            }
+
+        });
         //符号的显示,设计图标在阿里巴巴矢量图库里
 
         //针对不同的符号，设计相对应的标记函数
@@ -1019,6 +1124,52 @@
 
                     })
                 net_makers.push(marker1);
+                var contextMenu2 = new AMap.ContextMenu();
+                //右键添加起点
+                contextMenu2.addItem("设为路径规划起点", function () {
+
+                    document.getElementById('start').value = addr1;
+                    contextMenu2.close(); //点击后关闭右键菜单
+                    log.success('起点已设置');
+                }, 0);
+
+                //右键添加终点
+                contextMenu2.addItem("设为路径规划终点", function () {
+                    document.getElementById('end').value = addr1;
+                    contextMenu2.close(); //点击后关闭右键菜单
+                    log.success('终点已设置')
+                }, 1);
+
+                //右键添加距离测量起点
+
+                contextMenu2.addItem("设为网络距离测量起点", function () {
+                    net_startpoint = marker1;
+                    net_startIP = ip;
+                    contextMenu2.close(); //点击后关闭右键菜单
+                    log.success('网络距离测量起点已设置');
+                }, 2);
+                //右键添加距离测量终点
+                contextMenu2.addItem("设为网络距离测量终点", function () {
+                    net_endpoint = marker1;
+                    net_endpointIP = ip;
+                    contextMenu2.close(); //点击后关闭右键菜单
+                    log.success('网络距离测量终点已设置');
+                }, 3);
+                contextMenu2.addItem("设为距离测量起点", function () {
+                    startpoint = marker1;
+                    contextMenu2.close(); //点击后关闭右键菜单
+                    log.success('距离测量起点已设置');
+                }, 4);
+                //右键添加距离测量终点
+                contextMenu2.addItem("设为距离测量终点", function () {
+                    endpoint = marker1;
+                    contextMenu2.close(); //点击后关闭右键菜单
+                    log.success('距离测量终点已设置');
+                }, 5);
+                //右键显示菜单
+                marker1.on('rightclick', function (e) {
+                    contextMenu2.open(map, e.lnglat)
+                });
                 //添加信息窗体
                 AMapUI.loadUI(['overlay/SimpleInfoWindow'], function (SimpleInfoWindow) {
 
@@ -1070,6 +1221,14 @@
         var DL_Marks = [];
 
         function DL_addSvgMarker(lnglat, didian, district, address) {
+            var addr1 = null;
+            geocoder.getAddress(lnglat, function (status, result) {
+                if (status === 'complete' && result.regeocode) {
+                    addr1 = result.regeocode.formattedAddress;
+                } else {
+                    log.error('根据经纬度查询地址失败')
+                }
+            })
 
             AMapUI.loadUI(['overlay/SvgMarker'], function (SvgMarker) {
                 if (!SvgMarker.supportSvg) {
@@ -1107,6 +1266,39 @@
 
                     })
                 DL_Marks.push(marker1);
+                // 创建右键菜单
+                var contextMenu2 = new AMap.ContextMenu();
+                //右键添加起点
+                contextMenu2.addItem("设为路径规划起点", function () {
+                    document.getElementById('start').value = addr1;
+                    contextMenu2.close(); //点击后关闭右键菜单
+                    log.success('起点已设置');
+                }, 0);
+
+                //右键添加终点
+                contextMenu2.addItem("设为路径规划终点", function () {
+                    document.getElementById('end').value = addr1;
+                    contextMenu2.close(); //点击后关闭右键菜单
+                    log.success('终点已设置')
+                }, 1);
+
+                //右键添加距离测量起点
+
+                contextMenu2.addItem("设为距离测量起点", function () {
+                    startpoint = marker1;
+                    contextMenu2.close(); //点击后关闭右键菜单
+                    log.success('距离测量起点已设置');
+                }, 2);
+                //右键添加距离测量终点
+                contextMenu2.addItem("设为距离测量终点", function () {
+                    endpoint = marker1;
+                    contextMenu2.close(); //点击后关闭右键菜单
+                    log.success('距离测量终点已设置');
+                }, 3);
+                //右键显示菜单
+                marker1.on('rightclick', function (e) {
+                    contextMenu2.open(map, e.lnglat)
+                });
                 //添加信息窗体
                 AMapUI.loadUI(['overlay/SimpleInfoWindow'], function (SimpleInfoWindow) {
 
@@ -1156,12 +1348,12 @@
             var text1 = new AMap.Text({
                 text: '',
                 style: {
-                    'background-color': '#29b6f6',
+                    'background-color': 'rgba(41,106,246,0.7)',
                     'border-color': '#e1f5fe',
                     'font-size': '12px'
                 }
             });
-            text1.setText("路径" + num_tr.toString() + "：" + distance / 1000.0 + '千米')
+            text1.setText("路径" + num_tr.toString())//+ "：" + distance / 1000.0 + '千米')
             num_tr++;
             text1.setPosition(textPos)
             texts_tr.push(text1)
@@ -1187,15 +1379,14 @@
                 path: path,
                 isOutline: true,
                 outlineColor: '#ffeeff',
-                borderWeight: 1,
-                strokeColor: "#29e00c",
-                strokeOpacity: 1,
-                strokeWeight: 2,
+                strokeColor: "#da1111",
+                strokeWeight: 6,
                 strokeStyle: "dashed",//折线样式
                 strokeDasharray: [10, 5],
                 lineJoin: 'round',
                 lineCap: 'round',
                 zIndex: 51,
+                showDir: true
             });
             li = polyline;
             lines_tr.push(polyline);
@@ -1332,6 +1523,33 @@
 
         }
 
+        var data = [{
+            "ASN": "9808",
+            "City": "北京市",
+            "Country": "中国",
+            "Country Code": "cn",
+            "IP": "IP 1：39.156.66.10",
+            "ISP": "China Mobile",
+            "Latitude": "39.910524",
+            "Longtitude": "116.413787",
+            "Maps Link": "https://imy107.gitee.io/maps/?lnglat=116.413787,39.910524",
+            "Organization": "中国移动",
+            "Target": "39.156.66.10"
+        }, {
+            "ASN": "4837",
+            "City": "保定市",
+            "Country": "中国",
+            "Country Code": "cn",
+            "IP": "IP 1：110.242.68.66",
+            "ISP": "CHINA UNICOM China169 Backbone",
+            "Latitude": "38.886565",
+            "Longtitude": "115.494810",
+            "Maps Link": "https://imy107.gitee.io/maps/?lnglat=115.494810,38.886565",
+            "Organization": "中国联通",
+            "Target": "110.242.68.66"
+        }]
+        IP_Marker(JSON.stringify(data));
+
         function Tracert_Marker(ipjsondata) {
             let data = processJsonContent(ipjsondata);
             let pos1; // 初始化上一个点的位置
@@ -1358,7 +1576,7 @@
                     // 划面
                     //createAMapCircle(pos2, 10000);
 
-                    map.setFitView(net_makers, lines_tr);
+                    map.setFitView(net_makers);
                 } else {
                     console.log("IP无效");
                 }
